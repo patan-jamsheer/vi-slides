@@ -1,15 +1,19 @@
-@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=DM+Sans:wght@300;400;500;600&display=swap');
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
 :root {
-  --bg: #0a0a0f;
-  --surface: #13131a;
-  --border: #2a2a3a;
-  --accent: #6c63ff;
-  --accent2: #ff6584;
-  --text: #f0f0f5;
-  --muted: #888899;
+  --bg: #f5f6fa;
+  --surface: #ffffff;
+  --border: #e4e6ef;
+  --primary: #1a1f36;
+  --accent: #4f67ff;
+  --accent-light: #eef0ff;
+  --text: #1a1f36;
+  --muted: #6b7280;
+  --success: #10b981;
+  --warning: #f59e0b;
+  --danger: #ef4444;
 }
 
 body {

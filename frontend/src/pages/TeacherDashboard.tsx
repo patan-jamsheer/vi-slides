@@ -33,301 +33,270 @@ export default function TeacherDashboard() {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [summary, setSummary] = useState<Summary | null>(null);
 
-  const logout = () => {
-    localStorage.clear();
-    navigate("/login");
-  };
+  const logout = () => { localStorage.clear(); navigate("/login"); };
 
   const createSession = async () => {
     setLoading(true);
     try {
-      const res = await axios.post(
-        "http://localhost:5000/api/session/create",
-        {},
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      const sid = res.data.session._id;
-      const code = res.data.session.code;
-      setSessionCode(code);
-      setSessionId(sid);
+      const res = await axios.post("http://localhost:5000/api/session/create", {}, { headers: { Authorization: `Bearer ${token}` } });
+      setSessionCode(res.data.session.code);
+      setSessionId(res.data.session._id);
       setSessionStatus("waiting");
-      socket.emit("join-room", sid);
-    } catch (error) {
-      alert("Failed to create session");
-    } finally {
-      setLoading(false);
-    }
+      socket.emit("join-room", res.data.session._id);
+    } catch { alert("Failed to create session"); }
+    finally { setLoading(false); }
   };
 
   const updateStatus = async (status: string) => {
     try {
-      await axios.patch(
-        `http://localhost:5000/api/session/${sessionId}/status`,
-        { status },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
+      await axios.patch(`http://localhost:5000/api/session/${sessionId}/status`, { status }, { headers: { Authorization: `Bearer ${token}` } });
       setSessionStatus(status);
-
-      // Fetch summary when session ends
       if (status === "ended") {
-        const res = await axios.get(
-          `http://localhost:5000/api/session/${sessionId}/summary`,
-          { headers: { Authorization: `Bearer ${token}` } }
-        );
+        const res = await axios.get(`http://localhost:5000/api/session/${sessionId}/summary`, { headers: { Authorization: `Bearer ${token}` } });
         setSummary(res.data);
       }
-    } catch (error) {
-      alert("Failed to update session status");
-    }
+    } catch { alert("Failed to update status"); }
   };
 
   useEffect(() => {
-    socket.on("new-question", (question: Question) => {
-      setQuestions(prev => [...prev, question]);
-    });
+    socket.on("new-question", (q: Question) => setQuestions(prev => [...prev, q]));
     return () => { socket.off("new-question"); };
   }, []);
 
-  const getStatusColor = () => {
-    if (sessionStatus === "active") return "#4caf50";
-    if (sessionStatus === "paused") return "#ff9800";
-    if (sessionStatus === "ended") return "#ff6584";
-    return "#888899";
+  const statusConfig: Record<string, { color: string; bg: string }> = {
+    waiting: { color: "#6b7280", bg: "#f3f4f6" },
+    active: { color: "#059669", bg: "#d1fae5" },
+    paused: { color: "#d97706", bg: "#fef3c7" },
+    ended: { color: "#dc2626", bg: "#fee2e2" },
   };
+  const sc = statusConfig[sessionStatus] || statusConfig.waiting;
 
   return (
-    <div style={styles.page}>
-      <div style={styles.navbar}>
-        <span style={styles.logo}>Vi-SlideS</span>
-        <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
+    <div style={s.page}>
+      {/* Navbar */}
+      <div style={s.navbar}>
+        <div style={s.navLeft}>
+          <span style={s.logo}>Vi-SlideS</span>
           {sessionCode && (
-            <>
-              <div style={styles.codeBadge}>
-                Code: <strong style={{ color: "#6c63ff" }}>{sessionCode}</strong>
-              </div>
-              <div style={{ ...styles.statusBadge, color: getStatusColor(), borderColor: getStatusColor() }}>
-                ● {sessionStatus.toUpperCase()}
-              </div>
-            </>
+            <div style={s.codePill}>
+              Session Code: <strong style={{ color: "#1a1f36", letterSpacing: "2px" }}>{sessionCode}</strong>
+            </div>
           )}
-          <button style={styles.logout} onClick={logout}>Logout</button>
+        </div>
+        <div style={s.navRight}>
+          {sessionCode && (
+            <div style={{ ...s.statusPill, color: sc.color, background: sc.bg }}>
+              ● {sessionStatus.toUpperCase()}
+            </div>
+          )}
+          <div style={s.userBadge}>{user.name?.[0]?.toUpperCase()}</div>
+          <button style={s.logoutBtn} onClick={logout}>Sign out</button>
         </div>
       </div>
 
-      <div style={styles.content}>
+      <div style={s.content}>
         {!sessionCode ? (
-          <>
-            <h1 style={styles.title}>Welcome, {user.name} 👨‍🏫</h1>
-            <p style={styles.sub}>Start a session and share the code with your students</p>
-            <button style={styles.btn} onClick={createSession} disabled={loading}>
-              {loading ? "Creating..." : "Create Session"}
-            </button>
-          </>
+          /* Welcome Screen */
+          <div style={s.welcomeWrap}>
+            <div style={s.welcomeCard}>
+              <div style={s.welcomeIcon}>👨‍🏫</div>
+              <h1 style={s.welcomeTitle}>Good to see you, {user.name}!</h1>
+              <p style={s.welcomeSub}>Create a session to start receiving student questions in real-time.</p>
+              <button style={s.primaryBtn} onClick={createSession} disabled={loading}>
+                {loading ? "Creating session..." : "+ Create New Session"}
+              </button>
+            </div>
+            <div style={s.infoGrid}>
+              {[
+                { icon: "⚡", title: "Real-time Questions", desc: "See student questions appear instantly as they submit" },
+                { icon: "🤖", title: "AI Auto-Answers", desc: "Simple questions get answered automatically by AI" },
+                { icon: "📊", title: "Mood Insights", desc: "Understand class engagement with mood analysis" },
+              ].map(item => (
+                <div key={item.title} style={s.infoCard}>
+                  <span style={s.infoIcon}>{item.icon}</span>
+                  <p style={s.infoTitle}>{item.title}</p>
+                  <p style={s.infoDesc}>{item.desc}</p>
+                </div>
+              ))}
+            </div>
+          </div>
         ) : (
-          <>
-            {/* Session Controls */}
-            <div style={styles.controls}>
-              <button
-                style={{ ...styles.controlBtn, background: "#4caf50", opacity: sessionStatus === "active" ? 0.4 : 1 }}
-                onClick={() => updateStatus("active")}
-                disabled={sessionStatus === "active" || sessionStatus === "ended"}
-              >▶ Start</button>
-              <button
-                style={{ ...styles.controlBtn, background: "#ff9800", opacity: sessionStatus === "paused" ? 0.4 : 1 }}
-                onClick={() => updateStatus("paused")}
-                disabled={sessionStatus !== "active"}
-              >⏸ Pause</button>
-              <button
-                style={{ ...styles.controlBtn, background: "#ff6584", opacity: sessionStatus === "ended" ? 0.4 : 1 }}
-                onClick={() => updateStatus("ended")}
-                disabled={sessionStatus === "ended"}
-              >⏹ End</button>
+          <div style={s.sessionWrap}>
+            {/* Controls */}
+            <div style={s.controlBar}>
+              <div style={s.controlLeft}>
+                <span style={s.controlLabel}>Session Controls</span>
+              </div>
+              <div style={s.controlBtns}>
+                <button style={{ ...s.ctrlBtn, ...s.startBtn, opacity: sessionStatus === "active" || sessionStatus === "ended" ? 0.4 : 1 }}
+                  onClick={() => updateStatus("active")} disabled={sessionStatus === "active" || sessionStatus === "ended"}>
+                  ▶ Start
+                </button>
+                <button style={{ ...s.ctrlBtn, ...s.pauseBtn, opacity: sessionStatus !== "active" ? 0.4 : 1 }}
+                  onClick={() => updateStatus("paused")} disabled={sessionStatus !== "active"}>
+                  ⏸ Pause
+                </button>
+                <button style={{ ...s.ctrlBtn, ...s.endBtn, opacity: sessionStatus === "ended" ? 0.4 : 1 }}
+                  onClick={() => updateStatus("ended")} disabled={sessionStatus === "ended"}>
+                  ⏹ End Session
+                </button>
+              </div>
             </div>
 
-            {/* Summary View */}
+            {/* Summary */}
             {sessionStatus === "ended" && summary ? (
-              <div style={styles.summaryCard}>
-                <h2 style={styles.summaryTitle}>📊 Session Summary</h2>
-
-                <div style={styles.summaryGrid}>
-                  <div style={styles.summaryItem}>
-                    <p style={styles.summaryValue}>{sessionCode}</p>
-                    <p style={styles.summaryLabel}>Session Code</p>
-                  </div>
-                  <div style={styles.summaryItem}>
-                    <p style={styles.summaryValue}>{summary.totalQuestions}</p>
-                    <p style={styles.summaryLabel}>Total Questions</p>
-                  </div>
-                  <div style={styles.summaryItem}>
-                    <p style={styles.summaryValue}>{summary.durationMinutes}m</p>
-                    <p style={styles.summaryLabel}>Duration</p>
-                  </div>
+              <div style={s.summaryWrap}>
+                <h2 style={s.sectionTitle}>Session Summary</h2>
+                <div style={s.statsRow}>
+                  {[
+                    { label: "Session Code", value: sessionCode },
+                    { label: "Total Questions", value: summary.totalQuestions },
+                    { label: "Duration", value: `${summary.durationMinutes} min` },
+                  ].map(stat => (
+                    <div key={stat.label} style={s.statCard}>
+                      <p style={s.statValue}>{stat.value}</p>
+                      <p style={s.statLabel}>{stat.label}</p>
+                    </div>
+                  ))}
                 </div>
-
-                <div style={styles.moodBox}>
-                  <p style={styles.moodLabel}>Class Mood</p>
-                  <p style={styles.moodValue}>{summary.mood}</p>
+                <div style={s.moodCard}>
+                  <p style={s.moodLabel}>Class Mood Analysis</p>
+                  <p style={s.moodValue}>{summary.mood}</p>
                 </div>
-
                 {summary.questions.length > 0 && (
-                  <div style={styles.questionList}>
-                    <p style={styles.listTitle}>All Questions</p>
+                  <div style={s.qList}>
+                    <p style={s.qListTitle}>All Questions ({summary.questions.length})</p>
                     {summary.questions.map((q, i) => (
-                      <div key={q._id} style={styles.questionItem}>
-                        <span style={{ color: "#888899", fontSize: "12px" }}>Q{i + 1} {q.isAnonymous ? "🎭" : "🎓"}</span>
-                        <p style={styles.questionItemText}>{q.text}</p>
+                      <div key={q._id} style={s.qItem}>
+                        <div style={s.qMeta}>
+                          <span style={s.qNum}>Q{i + 1}</span>
+                          <span style={{ ...s.qBadge, background: q.status === "ai-answered" ? "#d1fae5" : "#fef3c7", color: q.status === "ai-answered" ? "#059669" : "#d97706" }}>
+                            {q.status === "ai-answered" ? "🤖 AI Answered" : "🧑‍🏫 Teacher"}
+                          </span>
+                          {q.isAnonymous && <span style={s.anonBadge}>Anonymous</span>}
+                        </div>
+                        <p style={s.qText}>{q.text}</p>
                       </div>
                     ))}
                   </div>
                 )}
-
-                <button style={styles.btn} onClick={() => {
-                  setSessionCode("");
-                  setSessionId("");
-                  setSessionStatus("waiting");
-                  setQuestions([]);
-                  setSummary(null);
-                }}>
+                <button style={s.primaryBtn} onClick={() => { setSessionCode(""); setSessionId(""); setSessionStatus("waiting"); setQuestions([]); setSummary(null); }}>
                   Start New Session
                 </button>
               </div>
             ) : questions.length === 0 ? (
-              <div style={styles.waiting}>
-                <div style={styles.waitingIcon}>⏳</div>
-                <h2 style={styles.waitingText}>Waiting for questions...</h2>
-                <p style={styles.sub}>Share code <strong style={{ color: "#6c63ff" }}>{sessionCode}</strong> with students</p>
+              <div style={s.waitingWrap}>
+                <div style={s.waitingCard}>
+                  <div style={s.waitingIcon}>⏳</div>
+                  <h2 style={s.waitingTitle}>Waiting for questions</h2>
+                  <p style={s.waitingSub}>Share the session code <strong style={{ color: "#4f67ff" }}>{sessionCode}</strong> with your students</p>
+                  {sessionStatus === "waiting" && <p style={{ color: "#dc2626", fontSize: "13px", marginTop: "12px" }}>⚠️ Click Start to allow students to submit</p>}
+                </div>
               </div>
             ) : (
-              <div style={styles.slideContainer}>
-                <div style={styles.slideNav}>
-                  <p style={styles.slideCount}>Question {currentIndex + 1} of {questions.length}</p>
-                </div>
-
-                <div style={styles.slide}>
-                  <div style={styles.slideHeader}>
-                    {questions[currentIndex].isAnonymous ? "🎭 Anonymous" : "🎓 Student"}
-                  </div>
-                  <p style={styles.slideQuestion}>{questions[currentIndex].text}</p>
-                  <div style={styles.slideStatus}>
-                    Status: <span style={{ color: "#6c63ff" }}>{questions[currentIndex].status}</span>
+              <div style={s.slideWrap}>
+                <div style={s.slideTop}>
+                  <p style={s.slideCounter}>Question {currentIndex + 1} of {questions.length}</p>
+                  <div style={s.slideNavBtns}>
+                    <button style={{ ...s.slideNavBtn, opacity: currentIndex === 0 ? 0.4 : 1 }}
+                      onClick={() => setCurrentIndex(p => Math.max(0, p - 1))} disabled={currentIndex === 0}>← Prev</button>
+                    <button style={{ ...s.slideNavBtn, opacity: currentIndex === questions.length - 1 ? 0.4 : 1 }}
+                      onClick={() => setCurrentIndex(p => Math.min(questions.length - 1, p + 1))} disabled={currentIndex === questions.length - 1}>Next →</button>
                   </div>
                 </div>
 
-                <div style={styles.navBtns}>
-                  <button
-                    style={{ ...styles.navBtn, opacity: currentIndex === 0 ? 0.4 : 1 }}
-                    onClick={() => setCurrentIndex(prev => Math.max(0, prev - 1))}
-                    disabled={currentIndex === 0}
-                  >← Prev</button>
-                  <button
-                    style={{ ...styles.navBtn, opacity: currentIndex === questions.length - 1 ? 0.4 : 1 }}
-                    onClick={() => setCurrentIndex(prev => Math.min(questions.length - 1, prev + 1))}
-                    disabled={currentIndex === questions.length - 1}
-                  >Next →</button>
+                <div style={s.slide}>
+                  <div style={s.slideTopRow}>
+                    <span style={s.slideMeta}>{questions[currentIndex].isAnonymous ? "🎭 Anonymous" : "🎓 Student"}</span>
+                    <span style={{ ...s.qBadge, background: questions[currentIndex].status === "ai-answered" ? "#d1fae5" : "#fef3c7", color: questions[currentIndex].status === "ai-answered" ? "#059669" : "#d97706" }}>
+                      {questions[currentIndex].status === "ai-answered" ? "🤖 AI Answered" : "🧑‍🏫 Needs Teacher"}
+                    </span>
+                  </div>
+                  <p style={s.slideQ}>{questions[currentIndex].text}</p>
                 </div>
 
-                <div style={styles.questionList}>
-                  <p style={styles.listTitle}>All Questions ({questions.length})</p>
+                <div style={s.qSidebar}>
+                  <p style={s.qListTitle}>All Questions</p>
                   {questions.map((q, i) => (
-                    <div
-                      key={q._id}
-                      style={{ ...styles.questionItem, border: `1px solid ${i === currentIndex ? "#6c63ff" : "#2a2a3a"}` }}
-                      onClick={() => setCurrentIndex(i)}
-                    >
-                      <span style={{ color: "#888899", fontSize: "12px" }}>Q{i + 1}</span>
-                      <p style={styles.questionItemText}>{q.text}</p>
+                    <div key={q._id} style={{ ...s.qSideItem, background: i === currentIndex ? "#eef0ff" : "#fff", borderColor: i === currentIndex ? "#4f67ff" : "#e4e6ef" }}
+                      onClick={() => setCurrentIndex(i)}>
+                      <span style={s.qNum}>Q{i + 1}</span>
+                      <p style={s.qSideText}>{q.text}</p>
                     </div>
                   ))}
                 </div>
               </div>
             )}
-          </>
+          </div>
         )}
       </div>
     </div>
   );
 }
 
-const styles: Record<string, React.CSSProperties> = {
-  page: { minHeight: "100vh", background: "#0a0a0f" },
-  navbar: {
-    display: "flex", justifyContent: "space-between",
-    alignItems: "center", padding: "20px 40px",
-    borderBottom: "1px solid #2a2a3a",
-  },
-  logo: { fontFamily: "'Syne', sans-serif", fontSize: "22px", fontWeight: 800, color: "#6c63ff" },
-  codeBadge: {
-    background: "#13131a", border: "1px solid #2a2a3a",
-    borderRadius: "8px", padding: "8px 16px", fontSize: "14px", color: "#f0f0f5",
-  },
-  statusBadge: {
-    border: "1px solid", borderRadius: "8px",
-    padding: "8px 16px", fontSize: "12px", fontWeight: 700,
-  },
-  logout: {
-    background: "transparent", border: "1px solid #2a2a3a",
-    color: "#888899", padding: "8px 20px", borderRadius: "8px", cursor: "pointer",
-  },
-  content: { padding: "40px", display: "flex", flexDirection: "column", alignItems: "center" },
-  title: { fontFamily: "'Syne', sans-serif", fontSize: "36px", fontWeight: 800, marginBottom: "12px" },
-  sub: { color: "#888899", fontSize: "15px", marginBottom: "32px" },
-  btn: {
-    background: "#6c63ff", color: "#fff", border: "none",
-    borderRadius: "12px", padding: "16px 40px",
-    fontSize: "16px", fontWeight: 600, cursor: "pointer",
-  },
-  controls: { display: "flex", gap: "12px", marginBottom: "40px" },
-  controlBtn: {
-    color: "#fff", border: "none", borderRadius: "10px",
-    padding: "12px 28px", fontSize: "15px", fontWeight: 600, cursor: "pointer",
-  },
-  summaryCard: {
-    background: "#13131a", border: "1px solid #2a2a3a",
-    borderRadius: "20px", padding: "48px 40px",
-    width: "100%", maxWidth: "600px", textAlign: "center",
-  },
-  summaryTitle: { fontFamily: "'Syne', sans-serif", fontSize: "28px", fontWeight: 800, marginBottom: "32px" },
-  summaryGrid: { display: "flex", gap: "16px", justifyContent: "center", marginBottom: "32px" },
-  summaryItem: {
-    background: "#0a0a0f", border: "1px solid #2a2a3a",
-    borderRadius: "12px", padding: "20px 28px",
-  },
-  summaryValue: { fontFamily: "'Syne', sans-serif", fontSize: "28px", fontWeight: 800, color: "#6c63ff" },
-  summaryLabel: { color: "#888899", fontSize: "12px", marginTop: "4px" },
-  moodBox: {
-    background: "#0a0a0f", border: "1px solid #6c63ff",
-    borderRadius: "12px", padding: "24px",
-    marginBottom: "32px",
-  },
-  moodLabel: { color: "#888899", fontSize: "12px", marginBottom: "8px" },
-  moodValue: { fontFamily: "'Syne', sans-serif", fontSize: "20px", fontWeight: 700 },
-  waiting: { textAlign: "center", marginTop: "40px" },
-  waitingIcon: { fontSize: "64px", marginBottom: "24px" },
-  waitingText: { fontFamily: "'Syne', sans-serif", fontSize: "28px", fontWeight: 700, marginBottom: "12px" },
-  slideContainer: { width: "100%", maxWidth: "700px" },
-  slideNav: { textAlign: "center", marginBottom: "16px" },
-  slideCount: { color: "#888899", fontSize: "14px" },
-  slide: {
-    background: "#13131a", border: "1px solid #6c63ff",
-    borderRadius: "20px", padding: "48px", textAlign: "center",
-    marginBottom: "24px", minHeight: "220px",
-    display: "flex", flexDirection: "column", justifyContent: "center",
-  },
-  slideHeader: { color: "#888899", fontSize: "13px", marginBottom: "20px" },
-  slideQuestion: { fontFamily: "'Syne', sans-serif", fontSize: "24px", fontWeight: 700, lineHeight: "1.5", marginBottom: "20px" },
-  slideStatus: { color: "#888899", fontSize: "13px" },
-  navBtns: { display: "flex", gap: "16px", justifyContent: "center", marginBottom: "40px" },
-  navBtn: {
-    background: "#13131a", color: "#f0f0f5",
-    border: "1px solid #2a2a3a", borderRadius: "10px",
-    padding: "12px 32px", fontSize: "15px", cursor: "pointer",
-  },
-  questionList: { width: "100%", textAlign: "left" },
-  listTitle: { color: "#888899", fontSize: "13px", marginBottom: "12px" },
-  questionItem: {
-    background: "#13131a", border: "1px solid #2a2a3a",
-    borderRadius: "10px", padding: "14px 16px",
-    marginBottom: "8px", cursor: "pointer",
-  },
-  questionItemText: { fontSize: "14px", color: "#f0f0f5", marginTop: "4px" },
+const s: Record<string, React.CSSProperties> = {
+  page: { minHeight: "100vh", background: "#f5f6fa", fontFamily: "'DM Sans', sans-serif" },
+  navbar: { display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0 40px", height: "64px", background: "#fff", borderBottom: "1px solid #e4e6ef", position: "sticky", top: 0, zIndex: 100 },
+  navLeft: { display: "flex", alignItems: "center", gap: "20px" },
+  logo: { fontFamily: "'Playfair Display', serif", fontSize: "20px", fontWeight: 700, color: "#1a1f36" },
+  codePill: { background: "#eef0ff", border: "1px solid #c7d0ff", borderRadius: "6px", padding: "6px 14px", fontSize: "13px", color: "#4f67ff" },
+  navRight: { display: "flex", alignItems: "center", gap: "12px" },
+  statusPill: { borderRadius: "6px", padding: "6px 12px", fontSize: "12px", fontWeight: 700 },
+  userBadge: { width: "34px", height: "34px", borderRadius: "50%", background: "#1a1f36", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, fontSize: "14px" },
+  logoutBtn: { background: "transparent", border: "1px solid #e4e6ef", color: "#6b7280", padding: "7px 16px", borderRadius: "6px", cursor: "pointer", fontSize: "13px" },
+  content: { padding: "40px" },
+  welcomeWrap: { maxWidth: "900px", margin: "0 auto" },
+  welcomeCard: { background: "#fff", border: "1px solid #e4e6ef", borderRadius: "16px", padding: "48px", textAlign: "center", marginBottom: "24px", boxShadow: "0 2px 12px rgba(0,0,0,0.04)" },
+  welcomeIcon: { fontSize: "48px", marginBottom: "16px" },
+  welcomeTitle: { fontFamily: "'Playfair Display', serif", fontSize: "28px", fontWeight: 700, color: "#1a1f36", marginBottom: "8px" },
+  welcomeSub: { color: "#6b7280", fontSize: "15px", marginBottom: "32px" },
+  primaryBtn: { background: "#1a1f36", color: "#fff", border: "none", borderRadius: "8px", padding: "14px 32px", fontSize: "15px", fontWeight: 600, cursor: "pointer" },
+  infoGrid: { display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "16px" },
+  infoCard: { background: "#fff", border: "1px solid #e4e6ef", borderRadius: "12px", padding: "24px", boxShadow: "0 2px 8px rgba(0,0,0,0.03)" },
+  infoIcon: { fontSize: "28px", display: "block", marginBottom: "12px" },
+  infoTitle: { fontWeight: 600, fontSize: "14px", color: "#1a1f36", marginBottom: "6px" },
+  infoDesc: { color: "#6b7280", fontSize: "13px", lineHeight: "1.6" },
+  sessionWrap: { maxWidth: "900px", margin: "0 auto" },
+  controlBar: { background: "#fff", border: "1px solid #e4e6ef", borderRadius: "12px", padding: "16px 24px", display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "24px" },
+  controlLeft: {},
+  controlLabel: { fontWeight: 600, fontSize: "14px", color: "#1a1f36" },
+  controlBtns: { display: "flex", gap: "10px" },
+  ctrlBtn: { border: "none", borderRadius: "6px", padding: "10px 20px", fontSize: "13px", fontWeight: 600, cursor: "pointer", color: "#fff" },
+  startBtn: { background: "#059669" },
+  pauseBtn: { background: "#d97706" },
+  endBtn: { background: "#dc2626" },
+  summaryWrap: { background: "#fff", border: "1px solid #e4e6ef", borderRadius: "16px", padding: "40px", boxShadow: "0 2px 12px rgba(0,0,0,0.04)" },
+  sectionTitle: { fontFamily: "'Playfair Display', serif", fontSize: "24px", fontWeight: 700, color: "#1a1f36", marginBottom: "24px" },
+  statsRow: { display: "flex", gap: "16px", marginBottom: "24px" },
+  statCard: { flex: 1, background: "#f5f6fa", border: "1px solid #e4e6ef", borderRadius: "10px", padding: "20px", textAlign: "center" },
+  statValue: { fontFamily: "'Playfair Display', serif", fontSize: "28px", fontWeight: 700, color: "#1a1f36", marginBottom: "4px" },
+  statLabel: { color: "#6b7280", fontSize: "12px" },
+  moodCard: { background: "#eef0ff", border: "1px solid #c7d0ff", borderRadius: "10px", padding: "20px", marginBottom: "24px" },
+  moodLabel: { color: "#4f67ff", fontSize: "12px", fontWeight: 600, marginBottom: "6px" },
+  moodValue: { color: "#1a1f36", fontSize: "16px", fontWeight: 600 },
+  qList: { marginBottom: "24px" },
+  qListTitle: { fontWeight: 600, fontSize: "14px", color: "#1a1f36", marginBottom: "12px" },
+  qItem: { background: "#f5f6fa", border: "1px solid #e4e6ef", borderRadius: "8px", padding: "14px 16px", marginBottom: "8px" },
+  qMeta: { display: "flex", gap: "8px", alignItems: "center", marginBottom: "6px" },
+  qNum: { background: "#1a1f36", color: "#fff", borderRadius: "4px", padding: "2px 8px", fontSize: "11px", fontWeight: 700 },
+  qBadge: { borderRadius: "4px", padding: "2px 8px", fontSize: "11px", fontWeight: 600 },
+  anonBadge: { background: "#f3f4f6", color: "#6b7280", borderRadius: "4px", padding: "2px 8px", fontSize: "11px" },
+  qText: { color: "#1a1f36", fontSize: "14px", lineHeight: "1.5" },
+  waitingWrap: { display: "flex", justifyContent: "center", paddingTop: "60px" },
+  waitingCard: { background: "#fff", border: "1px solid #e4e6ef", borderRadius: "16px", padding: "60px 48px", textAlign: "center", maxWidth: "480px", boxShadow: "0 2px 12px rgba(0,0,0,0.04)" },
+  waitingIcon: { fontSize: "56px", marginBottom: "20px" },
+  waitingTitle: { fontFamily: "'Playfair Display', serif", fontSize: "22px", fontWeight: 700, color: "#1a1f36", marginBottom: "8px" },
+  waitingSub: { color: "#6b7280", fontSize: "14px" },
+  slideWrap: {},
+  slideTop: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" },
+  slideCounter: { color: "#6b7280", fontSize: "13px", fontWeight: 600 },
+  slideNavBtns: { display: "flex", gap: "8px" },
+  slideNavBtn: { background: "#fff", border: "1px solid #e4e6ef", color: "#1a1f36", borderRadius: "6px", padding: "8px 20px", fontSize: "13px", fontWeight: 600, cursor: "pointer" },
+  slide: { background: "#fff", border: "1px solid #e4e6ef", borderRadius: "16px", padding: "48px", minHeight: "200px", display: "flex", flexDirection: "column", justifyContent: "center", marginBottom: "20px", boxShadow: "0 2px 12px rgba(0,0,0,0.04)" },
+  slideTopRow: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" },
+  slideMeta: { color: "#6b7280", fontSize: "13px" },
+  slideQ: { fontFamily: "'Playfair Display', serif", fontSize: "22px", fontWeight: 600, color: "#1a1f36", lineHeight: "1.6" },
+  qSidebar: { background: "#fff", border: "1px solid #e4e6ef", borderRadius: "12px", padding: "20px" },
+  qSideItem: { border: "1px solid", borderRadius: "8px", padding: "12px 14px", marginBottom: "8px", cursor: "pointer", display: "flex", gap: "10px", alignItems: "flex-start" },
+  qSideText: { fontSize: "13px", color: "#1a1f36", lineHeight: "1.4" },
 };
